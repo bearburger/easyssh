@@ -6,6 +6,8 @@ package easyssh
 
 import (
 	"bufio"
+	"crypto/x509"
+	"encoding/pem"
 	"fmt"
 	"golang.org/x/crypto/ssh"
 	"io"
@@ -24,19 +26,20 @@ var keyMap map[string][]byte = make(map[string][]byte)
 // Note: easyssh looking for private key in user's home directory (ex. /home/john + Key).
 // Then ensure your Key begins from '/' (ex. /.ssh/id_rsa)
 type MakeConfig struct {
-	User      string
-	Server    string
-	Key       string
-	Port      string
-	Password  string
-	EnablePTY bool
-	Update    bool
-	client    *ssh.Client
+	User       string
+	Server     string
+	Key        string
+	Port       string
+	Password   string
+	Passphrase string
+	EnablePTY  bool
+	Update     bool
+	client     *ssh.Client
 }
 
 // returns ssh.Signer from user you running app home path + cutted key path.
 // (ex. pubkey,err := getKeyFile("/.ssh/id_rsa") )
-func getKeyFile(keypath string) (pubkey ssh.Signer, err error) {
+func getKeyFile(keypath, passphrase string) (pubkey ssh.Signer, err error) {
 	var buf []byte
 	var ok bool
 	if buf, ok = keyMap[keypath]; !ok {
@@ -46,6 +49,16 @@ func getKeyFile(keypath string) (pubkey ssh.Signer, err error) {
 			return nil, err
 		}
 		keyMap[keypath] = buf
+	}
+	if passphrase != "" {
+		block, _ := pem.Decode(buf)
+		key, err := x509.DecryptPEMBlock(block, []byte(passphrase))
+		if err != nil {
+			return nil, err
+		}
+		block.Headers = nil
+		block.Bytes = key
+		buf = pem.EncodeToMemory(block)
 	}
 	pubkey, err = ssh.ParsePrivateKey(buf)
 	if err != nil {
@@ -89,7 +102,7 @@ func (ssh_conf *MakeConfig) connect() (*ssh.Session, error) {
 	//		defer sshAgent.Close()
 	//	}
 
-	if pubkey, err := getKeyFile(ssh_conf.Key); err == nil {
+	if pubkey, err := getKeyFile(ssh_conf.Key, ssh_conf.Passphrase); err == nil {
 		auths = append(auths, ssh.PublicKeys(pubkey))
 	}
 
