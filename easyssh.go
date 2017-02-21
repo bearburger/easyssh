@@ -74,7 +74,7 @@ func (ssh_conf *MakeConfig) connect() (*ssh.Session, error) {
 	auths := []ssh.AuthMethod{}
 
 	// figure out what auths are requested, what is supported
-	if ssh_conf.Password != "" && ssh_conf.Key == "" {
+	if ssh_conf.Password != "" {
 		auths = append(auths, ssh.Password(ssh_conf.Password))
 
 		auths = append(auths, ssh.KeyboardInteractive(func(user, instruction string, questions []string, echos []bool) ([]string, error) {
