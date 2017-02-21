@@ -14,6 +14,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"sync"
 )
 
 var keyMap map[string][]byte = make(map[string][]byte)
@@ -35,11 +36,12 @@ type MakeConfig struct {
 	EnablePTY  bool
 	Update     bool
 	client     *ssh.Client
+	m          sync.Mutex
 }
 
 // returns ssh.Signer from user you running app home path + cutted key path.
 // (ex. pubkey,err := getKeyFile("/.ssh/id_rsa") )
-func getKeyFile(keypath, passphrase string) (pubkey ssh.Signer, err error) {
+func (ssh_conf *MakeConfig) getKeyFile(keypath, passphrase string) (pubkey ssh.Signer, err error) {
 	var buf []byte
 	var ok bool
 	if buf, ok = keyMap[keypath]; !ok {
@@ -48,7 +50,9 @@ func getKeyFile(keypath, passphrase string) (pubkey ssh.Signer, err error) {
 		if err != nil {
 			return nil, err
 		}
+		ssh_conf.m.Lock()
 		keyMap[keypath] = buf
+		ssh_conf.m.Unlock()
 	}
 	if passphrase != "" {
 		block, _ := pem.Decode(buf)
@@ -102,7 +106,7 @@ func (ssh_conf *MakeConfig) connect() (*ssh.Session, error) {
 	//		defer sshAgent.Close()
 	//	}
 
-	if pubkey, err := getKeyFile(ssh_conf.Key, ssh_conf.Passphrase); err == nil {
+	if pubkey, err := ssh_conf.getKeyFile(ssh_conf.Key, ssh_conf.Passphrase); err == nil {
 		auths = append(auths, ssh.PublicKeys(pubkey))
 	}
 
