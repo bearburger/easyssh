@@ -11,13 +11,16 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net"
 	"os"
 	"path/filepath"
 	"sync"
 
 	"golang.org/x/crypto/ssh"
-	"net"
 )
+
+var m sync.Mutex
+var keyMap map[string][]byte = make(map[string][]byte)
 
 // Contains main authority information.
 // User field should be a name of user on remote server (ex. john in ssh john@example.com).
@@ -43,13 +46,17 @@ type MakeConfig struct {
 // (ex. pubkey,err := getKeyFile("/.ssh/id_rsa") )
 func (ssh_conf *MakeConfig) getKeyFile(keypath, passphrase string) (pubkey ssh.Signer, err error) {
 	var buf []byte
-
-	file := keypath
-	buf, err = ioutil.ReadFile(file)
-	if err != nil {
-		return nil, err
+	var ok bool
+	if buf, ok = keyMap[keypath]; !ok {
+		file := keypath
+		buf, err = ioutil.ReadFile(file)
+		if err != nil {
+			return nil, err
+		}
+		m.Lock()
+		keyMap[keypath] = buf
+		m.Unlock()
 	}
-
 	if passphrase != "" {
 		block, _ := pem.Decode(buf)
 		key, err := x509.DecryptPEMBlock(block, []byte(passphrase))
@@ -252,4 +259,10 @@ func (ssh_conf *MakeConfig) Scp(sourceFile string) error {
 	}
 
 	return nil
+}
+
+func (ssh_conf *MakeConfig) CloseConnection() {
+	if ssh_conf.client != nil {
+		ssh_conf.client.Close()
+	}
 }
