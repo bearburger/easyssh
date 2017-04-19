@@ -9,14 +9,16 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
-	"golang.org/x/crypto/ssh"
 	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sync"
+
+	"golang.org/x/crypto/ssh"
 )
 
+var m sync.Mutex
 var keyMap map[string][]byte = make(map[string][]byte)
 
 // Contains main authority information.
@@ -50,9 +52,9 @@ func (ssh_conf *MakeConfig) getKeyFile(keypath, passphrase string) (pubkey ssh.S
 		if err != nil {
 			return nil, err
 		}
-		ssh_conf.m.Lock()
+		m.Lock()
 		keyMap[keypath] = buf
-		ssh_conf.m.Unlock()
+		m.Unlock()
 	}
 	if passphrase != "" {
 		block, _ := pem.Decode(buf)
@@ -100,11 +102,6 @@ func (ssh_conf *MakeConfig) connect() (*ssh.Session, error) {
 	if ssh_conf.User == "" {
 		ssh_conf.User = os.Getenv("USER")
 	}
-
-	//	if sshAgent, err := net.Dial("unix", os.Getenv("SSH_AUTH_SOCK")); err == nil {
-	//		auths = append(auths, ssh.PublicKeysCallback(agent.NewClient(sshAgent).Signers))
-	//		defer sshAgent.Close()
-	//	}
 
 	if pubkey, err := ssh_conf.getKeyFile(ssh_conf.Key, ssh_conf.Passphrase); err == nil {
 		auths = append(auths, ssh.PublicKeys(pubkey))
